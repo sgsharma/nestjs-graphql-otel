@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common';
-import { GqlOptionsFactory } from '@nestjs/graphql';
+import { CallHandler, ExecutionContext, NestInterceptor, Injectable } from '@nestjs/common';
+import { GqlOptionsFactory, GqlExecutionContext } from '@nestjs/graphql';
 import { YogaDriver, YogaDriverConfig } from '@graphql-yoga/nestjs';
 import { useResponseCache } from '@envelop/response-cache';
 import { useLogger, type SetSchemaFn, type Plugin } from '@envelop/core';
@@ -13,14 +13,65 @@ import config from 'config';
 import { LoggerStore } from '../logger/logger.store';
 
 import { GraphQLSchemaLoaderService } from './schema-loader/schema-loader.service';
+import { Observable, tap } from 'rxjs';
+
+// import { useOpenTelemetry } from '@envelop/opentelemetry';
+import { SpanKind, trace, context as ctx } from '@opentelemetry/api';
 
 const GRAPHQL_SETTINGS = config.get<IGraphQLSettings>('GRAPHQL_SETTINGS');
+// Get the tracer
+const gqlTracer = trace.getTracer('graphql');
 
 const setSchemaUpdater: (setFn: (schemaUpdater: SetSchemaFn) => GraphQLSchema) => Plugin = (fn) => ({
   onPluginInit({ setSchema: set_schema }) {
     fn(set_schema);
   },
 });
+
+@Injectable()
+export class GraphQLFieldsInterceptor implements NestInterceptor {
+  intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+    const gqlContext = GqlExecutionContext.create(context);
+    const requestedFields = this.extractRequestedFields(gqlContext.getInfo().fieldNodes[0]);
+    const info = gqlContext.getInfo();
+    const { req } = gqlContext.getContext();
+
+    const activeSpan = trace.getActiveSpan();
+    activeSpan.setAttribute('graphql.operation.name', req.body.operationName);
+    activeSpan.setAttribute('graphql.operation.query', req.body.query);
+
+    // Start an OpenTelemetry span for the GraphQL operation
+    const span = gqlTracer.startSpan('GraphQL Operation', { kind: SpanKind.CLIENT }, ctx.active());
+
+    // Set attributes or add metadata to the span if needed
+    span.setAttribute('graphql.operation.type', info.operation.operation);
+    span.setAttribute('graphql.field.name', info.fieldName);
+    span.setAttribute('graphql.field.selections', requestedFields);
+
+    // Execute the next handler in the chain
+    return next.handle().pipe(
+      tap((response) => {
+        console.log(JSON.stringify(response));
+
+        // Add response-related attributes to the span
+        span.setAttribute('graphql.response', JSON.stringify(response));
+
+        // Close the span when the operation is completed
+        span.end();
+      })
+    );
+  }
+
+  private extractRequestedFields(fieldNode: any): string[] {
+    const fields: string[] = [];
+    fieldNode.selectionSet.selections.forEach((selection) => {
+      if (selection.kind === 'Field') {
+        fields.push(selection.name.value);
+      }
+    });
+    return fields;
+  }
+}
 
 @Injectable()
 export class GraphQLOptions implements GqlOptionsFactory {
@@ -58,6 +109,15 @@ export class GraphQLOptions implements GqlOptionsFactory {
         return this.schemaLoaderService.schema$.value;
       },
       plugins: [
+        // useOpenTelemetry(
+        //   {
+        //     resolvers: true, // Tracks resolvers calls, and tracks resolvers thrown errors
+        //     variables: true, // Includes the operation variables values as part of the metadata collected
+        //     result: true, // Includes execution result object as part of the metadata collected
+        //   },
+        //   trace.getTracerProvider(),
+        //   SpanKind.SERVER
+        // ),
         setSchemaUpdater(this.setSchemaUpdater.bind(this)),
         useResponseCache({
           session: ({ current_user }: { current_user: ICurrentUser }) => String(current_user.id),
@@ -88,12 +148,10 @@ export class GraphQLOptions implements GqlOptionsFactory {
 
             let operation: string;
             const selections: string[] = [];
-
             args.document.definitions.forEach((definition) => {
               if (definition.kind === 'OperationDefinition') {
                 operation = definition.operation;
-
-                definition.selectionSet.selections.forEach((selection) => {
+                definition.selectionSet.selections.forEach((selection, i) => {
                   if (selection.kind === 'Field') {
                     selections.push(selection.name.value);
                   }
@@ -102,6 +160,9 @@ export class GraphQLOptions implements GqlOptionsFactory {
             });
 
             logger_store.info(`GraphQL ${event_name}`, { event: event_name, operation, selections });
+            const logStmt = `GraphQL ${operation} - ${selections.join(', ')}`;
+            const span = trace.getActiveSpan();
+            span.setAttribute('graphql.event_name', logStmt);
           },
         }),
       ],

@@ -10,8 +10,6 @@ import { ModelsModule } from './models/models.module';
 import { GraphQLModule } from './graphql/graphql.module';
 import opentelemetry from '@opentelemetry/api';
 
-const tracer = opentelemetry.trace.getTracer('nestjs-yogi-app');
-
 @Module({
   imports: [LoggerModule, HealthzModule, DatabaseModule, ModelsModule, GraphQLModule],
   controllers: [],
@@ -23,7 +21,7 @@ export class AppModule {
 
     interval(30_000).subscribe(() => {
       const memory_data = process.memoryUsage();
-      const span = tracer.startSpan('load-graphql-schema');
+      const span = opentelemetry.trace.getActiveSpan();
       const memory_usage = {
         rss: `${formatMemoryUsage(memory_data.rss)} -> Resident Set Size - total memory allocated for the process execution`,
         heapTotal: `${formatMemoryUsage(memory_data.heapTotal)} -> total size of the allocated heap`,
@@ -39,7 +37,6 @@ export class AppModule {
       console.log(memory_usage);
     });
   }
-
   public configure(consumer: MiddlewareConsumer): void | MiddlewareConsumer {
     consumer.apply(LoggerMiddleware).forRoutes('*');
   }

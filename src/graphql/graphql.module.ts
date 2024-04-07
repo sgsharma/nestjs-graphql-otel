@@ -1,6 +1,6 @@
 import { GraphQLModule as NestJSGraphQLModule, GraphQLSchemaHost } from '@nestjs/graphql';
 import { Global, Inject, Module, OnModuleInit } from '@nestjs/common';
-import { HttpAdapterHost } from '@nestjs/core';
+import { HttpAdapterHost, APP_INTERCEPTOR } from '@nestjs/core';
 import { YogaDriverConfig, YogaDriver } from '@graphql-yoga/nestjs';
 
 import { Application } from 'express';
@@ -8,7 +8,7 @@ import { useSofa } from 'sofa-api';
 
 import { LoggerStore } from '../logger/logger.store';
 
-import { GraphQLOptions } from './graphql.options';
+import { GraphQLOptions, GraphQLFieldsInterceptor } from './graphql.options';
 import { GraphQLSchemaLoaderModule } from './schema-loader/schema-loader.module';
 
 @Global()
@@ -21,7 +21,12 @@ import { GraphQLSchemaLoaderModule } from './schema-loader/schema-loader.module'
       driver: YogaDriver,
     }),
   ],
-  providers: [],
+  providers: [
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: GraphQLFieldsInterceptor,
+    },
+  ],
   exports: [],
 })
 export class GraphQLModule implements OnModuleInit {
