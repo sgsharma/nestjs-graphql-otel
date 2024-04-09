@@ -38,7 +38,7 @@ export class SectionResolver {
         childSpanExt = childSpan;
         childSpan.setAttribute('graphql.operation.type', info.operation.operation);
         childSpan.setAttribute('graphql.operation.name', info.operation.name.value);
-        childSpan.setAttribute('graphql.operation.selectionSet', info.operation.selectionSet.selections);
+        childSpan.setAttribute('graphql.operation.selectionSet', fields);
       });
     });
 
