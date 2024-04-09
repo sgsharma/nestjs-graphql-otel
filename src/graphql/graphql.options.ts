@@ -32,44 +32,20 @@ const setSchemaUpdater: (setFn: (schemaUpdater: SetSchemaFn) => GraphQLSchema) =
 export class GraphQLFieldsInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const gqlContext = GqlExecutionContext.create(context);
-    const requestedFields = this.extractRequestedFields(gqlContext.getInfo().fieldNodes[0]);
     const info = gqlContext.getInfo();
     const { req } = gqlContext.getContext();
 
     const activeSpan = trace.getActiveSpan();
     activeSpan.setAttribute('graphql.operation.name', req.body.operationName);
     activeSpan.setAttribute('graphql.operation.query', req.body.query);
-
-    // Start an OpenTelemetry span for the GraphQL operation
-    const span = gqlTracer.startSpan('GraphQL Operation', { kind: SpanKind.CLIENT }, ctx.active());
-
-    // Set attributes or add metadata to the span if needed
-    span.setAttribute('graphql.operation.type', info.operation.operation);
-    span.setAttribute('graphql.field.name', info.fieldName);
-    span.setAttribute('graphql.field.selections', requestedFields);
+    activeSpan.setAttribute('graphql.operation.type', info.operation.operation);
 
     // Execute the next handler in the chain
     return next.handle().pipe(
       tap((response) => {
         console.log(JSON.stringify(response));
-
-        // Add response-related attributes to the span
-        span.setAttribute('graphql.response', JSON.stringify(response));
-
-        // Close the span when the operation is completed
-        span.end();
       })
     );
-  }
-
-  private extractRequestedFields(fieldNode: any): string[] {
-    const fields: string[] = [];
-    fieldNode.selectionSet.selections.forEach((selection) => {
-      if (selection.kind === 'Field') {
-        fields.push(selection.name.value);
-      }
-    });
-    return fields;
   }
 }
 

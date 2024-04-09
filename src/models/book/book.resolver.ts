@@ -1,14 +1,18 @@
-import { Context, GraphQLExecutionContext, Parent, Resolver } from '@nestjs/graphql';
+import { Context, GraphQLExecutionContext, Info, Parent, Resolver } from '@nestjs/graphql';
 
 import { Query, ResolveField, ELoaderType, Loader, Filter, Order, Pagination } from 'nestjs-graphql-easy';
+import { trace, context, Span } from '@opentelemetry/api';
 
 import { Section } from '../section/section.entity';
 import { Book } from './book.entity';
+
+const gqlTracer = trace.getTracer('graphql');
 
 @Resolver(() => Book)
 export class BookResolver {
   @Query(() => [Book])
   public async books(
+    @Info() info: any,
     @Loader({
       loader_type: ELoaderType.MANY,
       field_name: 'books',
@@ -21,11 +25,36 @@ export class BookResolver {
     @Pagination() _pagination: unknown,
     @Context() ctx: GraphQLExecutionContext
   ) {
-    return await ctx[field_alias];
+    const fields: string[] = [];
+    info.fieldNodes[0].selectionSet.selections.forEach((selection: any) => {
+      if (selection.kind === 'Field') {
+        fields.push(selection.name.value);
+      }
+    });
+
+    let childSpanExt: Span;
+    context.with(context.active(), () => {
+      gqlTracer.startActiveSpan(info.fieldName, (childSpan) => {
+        childSpanExt = childSpan;
+        childSpan.setAttribute('graphql.operation.type', info.operation.operation);
+        childSpan.setAttribute('graphql.operation.name', info.operation.name.value);
+        childSpan.setAttribute('graphql.operation.selectionSet', info.operation.selectionSet.selections);
+      });
+    });
+
+    try {
+      const resolverResponse = await ctx[field_alias];
+      childSpanExt.setAttribute('graphql.resolver.response', JSON.stringify(resolverResponse));
+      childSpanExt.end();
+      return resolverResponse;
+    } finally {
+      console.log('Done');
+    }
   }
 
   @ResolveField(() => [Section], { nullable: true })
   public async sections(
+    @Info() info: any,
     @Parent() book: Book,
     @Loader({
       loader_type: ELoaderType.ONE_TO_MANY,
