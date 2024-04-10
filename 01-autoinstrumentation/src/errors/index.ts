@@ -1,5 +1,4 @@
 import { Catch, ExceptionFilter, HttpException, ArgumentsHost, Logger } from '@nestjs/common';
-import { GqlArgumentsHost, GqlExceptionFilter } from '@nestjs/graphql';
 
 interface IErrData {
   msg?: string;
@@ -247,24 +246,3 @@ export const cors_not_allowed = (data?: IErrData, is_http_exception = true) => {
 
   return err;
 };
-
-@Catch()
-export class GraphQLErrorFilter implements GqlExceptionFilter {
-  private logger = new Logger('GraphQLErrorFilter');
-
-  catch(exception: any, host: ArgumentsHost) {
-    const gqlHost = GqlArgumentsHost.create(host);
-    const ctx = gqlHost.getContext();
-    const response = gqlHost.getResponse();
-
-    const status = exception.getStatus();
-
-    this.logger.error(`GraphQL Exception: ${exception.message}`, JSON.stringify(exception.stack));
-
-    return {
-      statusCode: status,
-      timestamp: new Date().toISOString(),
-      path: ctx.req.url,
-    };
-  }
-}
