@@ -22,7 +22,7 @@
     "db:migration:run": "npm run typeorm:cli -- -d ./src/database/database-ormconfig.cli.ts migration:run",
     "db:migration:revert": "npm run typeorm:cli -- -d ./src/database/database-ormconfig.cli.ts migration:revert",
     "db:schema:sync": "npm run typeorm:cli -- -d ./src/database/database-ormconfig.cli.ts schema:sync",
-    "prepare": "husky install"
+    "prepare": "cd .. && husky install 01-autoinstrumentation/.husky"
   },
   "dependencies": {
     "@envelop/core": "^5.0.0",

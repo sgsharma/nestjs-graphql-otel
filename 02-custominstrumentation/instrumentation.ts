@@ -17,7 +17,7 @@ const exporter = new OTLPTraceExporter({
 
 const sdk = new NodeSDK({
   resource: new Resource({
-    [SEMRESATTRS_SERVICE_NAME]: 'nestjs-yogi-example',
+    [SEMRESATTRS_SERVICE_NAME]: '02-custominstrumentation',
     [SEMRESATTRS_SERVICE_VERSION]: '1.0',
   }),
   traceExporter: exporter,

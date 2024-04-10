@@ -37,5 +37,3 @@ uploads/*
 !uploads/.gitkeep
 
 src/graphql/schema.graphql
-logfile
-src/database/migrations/
