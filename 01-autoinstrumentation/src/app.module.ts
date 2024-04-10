@@ -11,12 +11,7 @@ import { GraphQLModule } from './graphql/graphql.module';
 @Module({
   imports: [LoggerModule, HealthzModule, DatabaseModule, ModelsModule, GraphQLModule],
   controllers: [],
-  providers: [
-    {
-      provide: APP_FILTER,
-      useClass: GraphQLErrorFilter,
-    },
-  ],
+  providers: [],
 })
 export class AppModule {
   constructor() {
