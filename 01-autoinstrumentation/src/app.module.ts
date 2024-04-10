@@ -1,7 +1,6 @@
 import { MiddlewareConsumer, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { interval } from 'rxjs';
-import { GraphQLErrorFilter } from './errors';
 import { DatabaseModule } from './database/database.module';
 import { HealthzModule } from './healthz/healthz.module';
 import { LoggerModule } from './logger/logger.module';
